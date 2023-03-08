@@ -1,5 +1,5 @@
-import fs from "fs";
 import { Client } from "basic-ftp";
+import { Transform } from "stream";
 import { parseXml } from "./parser";
 
 export enum AMOCProductType {
@@ -62,11 +62,13 @@ export async function getFloodWarningDetail(
   try {
     // first, try to download the `.xml` file
     // if this doesn't exist we throw an error
+    const xmlStream = new Transform({ encoding: "utf-8" });
+    xmlStream._transform = function (chunk, encoding, callback) {
+      this.push(chunk);
+      callback();
+    };
     try {
-      await client.downloadTo(
-        `./${warningId}.amoc.xml`,
-        `${warningId}.amoc.xml`
-      );
+      await client.downloadTo(xmlStream, `${warningId}.amoc.xml`);
     } catch (error) {
       client.close();
       return Promise.reject(new Error(`invalid warningId`));
@@ -76,11 +78,11 @@ export async function getFloodWarningDetail(
     let fileContents: string;
     let parsedXml: { [key: string]: any };
     try {
-      fileContents = fs.readFileSync(`./${warningId}.amoc.xml`, {
-        encoding: "utf-8",
-      });
+      fileContents = xmlStream.read().toString();
+      xmlStream.destroy();
       parsedXml = await parseXml(fileContents);
     } catch (error) {
+      xmlStream.destroy();
       client.close();
       return Promise.reject(new Error(`failed to read ${warningId}.amoc.xml`));
     }
@@ -101,17 +103,22 @@ export async function getFloodWarningDetail(
 
     // now let's fetch the warning text from the `.txt` file
     let text: string;
+    const txtStream = new Transform({ encoding: "utf-8" });
+    txtStream._transform = function (chunk, encoding, callback) {
+      this.push(chunk);
+      callback();
+    };
     try {
-      await client.downloadTo(`./${warningId}.txt`, `${warningId}.txt`);
-      text = fs.readFileSync(`./${warningId}.txt`, {
-        encoding: "utf-8",
-      });
+      await client.downloadTo(txtStream, `${warningId}.txt`);
+      client.close();
+      text = txtStream.read().toString();
+      txtStream.destroy();
     } catch (error) {
+      txtStream.destroy();
       client.close();
       return Promise.reject(new Error(`failed to read ${warningId}.txt`));
     }
 
-    client.close();
     return Promise.resolve({
       service: service,
       productType: productType,
