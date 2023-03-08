@@ -1,11 +1,37 @@
 import fs from "fs";
-import {
-  AMOCProductType,
-  AMOCServiceType,
-  AMOCStateId,
-} from "../shared/constants";
-import { getFloodWarningFTPClient } from "../shared/flood-warning-ftp-client";
-import { parseXml } from "../shared/parser";
+import { Client } from "basic-ftp";
+import { parseXml } from "./parser";
+
+export enum AMOCProductType {
+  "A" = "Advice",
+  "B" = "Bundle",
+  "C" = "Climate",
+  "D" = "Metadata",
+  "E" = "Analysis",
+  "F" = "Forecast",
+  "M" = "Numerical Weather Prediction",
+  "O" = "Observation",
+  "Q" = "Reference",
+  "R" = "Radar",
+  "S" = "Special",
+  "T" = "Satellite",
+  "W" = "Warning",
+  "X" = "Mixed",
+}
+
+export enum AMOCServiceType {
+  "COM" = "Commercial Services",
+  "HFW" = "Flood Warning Service",
+  "TWS" = "Tsunami Warning Services",
+  "WAP" = "Analysis and Prediction",
+  "WSA" = "Aviation Weather Services",
+  "WSD" = "Defence Weather Services",
+  "WSF" = "Fire Weather Services",
+  "WSM" = "Marine Weather Services",
+  "WSP" = "Public Weather Services",
+  "WSS" = "Cost Recovery Services",
+  "WSW" = "Disaster Mitigation",
+}
 
 export interface FloodWarningDetail {
   productType: AMOCProductType;
@@ -18,7 +44,20 @@ export interface FloodWarningDetail {
 export async function getFloodWarningDetail(
   warningId: string
 ): Promise<FloodWarningDetail> {
-  const client = await getFloodWarningFTPClient();
+  // access BOM server via FTP client
+  const client: Client = new Client();
+  client.ftp.verbose = true;
+
+  // potential for error so wrap in a try-catch
+  try {
+    await client.access({
+      host: "ftp.bom.gov.au",
+      secure: false,
+    });
+    await client.cd("/anon/gen/fwo/");
+  } catch (e) {
+    return Promise.reject(new Error("failed to access BOM server"));
+  }
 
   try {
     // first, try to download the `.xml` file

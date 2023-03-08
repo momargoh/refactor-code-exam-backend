@@ -1,5 +1,15 @@
-import { AMOCStateId } from "../shared/constants";
-import { getFloodWarningFTPClient } from "../shared/flood-warning-ftp-client";
+import { Client } from "basic-ftp";
+
+export enum AMOCStateId {
+  NT = "IDD",
+  NSW = "IDN",
+  QLD = "IDQ",
+  SA = "IDS",
+  TAS = "IDT",
+  VIC = "IDV",
+  WA = "IDW",
+  ACT = "IDN",
+}
 
 export async function getFloodWarningList(stateId: string): Promise<string[]> {
   // ensure state param is valid
@@ -12,7 +22,22 @@ export async function getFloodWarningList(stateId: string): Promise<string[]> {
     }
   }
 
-  const client = await getFloodWarningFTPClient();
+  // access BOM server via FTP client
+  const client: Client = new Client();
+  client.ftp.verbose = true;
+
+  // potential for error so wrap in a try-catch
+  try {
+    await client.access({
+      host: "ftp.bom.gov.au",
+      secure: false,
+    });
+    await client.cd("/anon/gen/fwo/");
+  } catch (e) {
+    return Promise.reject(new Error("failed to access BOM server"));
+  }
+
+  // read list of warnings
   let warningList: string[] = [];
   try {
     const fileList = await client.list();
