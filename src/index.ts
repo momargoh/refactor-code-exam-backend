@@ -1,10 +1,7 @@
-import { downloadTo } from "basic-ftp/dist/transfer";
 import express from "express";
-import { getWarnings } from "./floods/amoc";
 import { Downloader } from "./floods/Downloader";
-import { getAmocToStateId } from "./getAmocToStateId";
 import { FloodWarningParser } from "./parser/floodWarning";
-import { parseXml } from "./parser/parser";
+import { getFloodWarningList } from "./flood-warning-list/flood-warning-list";
 
 require("./logger.ts");
 
@@ -15,21 +12,33 @@ const ERRORMESSAGE = "Something went wrong";
 
 app.get("/", async (req, res) => {
   try {
-    const data = await getWarnings();
-
-    const state = getAmocToStateId(req.query.state?.toString() || "");
-
-    let results = [];
-    for (let key in data) {
-      if (key.startsWith(state)) {
-        results.push(key.replace(/\.amoc\.xml/, ""));
-      }
-    }
+    // fetch results from service
+    const results = await getFloodWarningList(
+      req.query.state?.toString() ?? ""
+    );
 
     res.send(results);
-  } catch (error) {
-    console.log(error);
-    res.send(ERRORMESSAGE);
+  } catch (e: any) {
+    console.log(e);
+
+    // look specifically for `"invalid stateId"` error message
+    // to give better error response for this common error
+    let message: string, status: number;
+    switch (e.message) {
+      case "invalid stateId":
+        status = 400;
+        message = "invalid state query param";
+        break;
+
+      default:
+        status = 500;
+        message = e.message;
+        break;
+    }
+    res.status(status).send({
+      error: e.name,
+      message: message,
+    });
   }
 });
 
