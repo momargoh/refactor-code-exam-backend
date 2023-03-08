@@ -1,4 +1,2 @@
-node_modules/
-/*.xml
-/*.txt
+**/node_modules/
 *.log
